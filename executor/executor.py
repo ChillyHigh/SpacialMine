@@ -24,6 +24,7 @@ class Executor:
             obs_size=config.env_obs_size,
             seed=config.env_seed or 0,
             preferred_spawn_biome=config.env_preferred_biome,
+            callbacks=list(config.env_callbacks),
         )
         self.lock = threading.Lock()
         self.cancel_event = threading.Event()
