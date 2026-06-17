@@ -2,7 +2,7 @@ from typing import Any
 
 from config import Config
 from executor.base import AbstractHandler
-from executor.types import Result
+from executor.types import GuiState, Result
 
 
 class PlaceBlockHandler(AbstractHandler):
@@ -33,5 +33,5 @@ class PlaceBlockHandler(AbstractHandler):
                 return Result(False, self.action_type, "cancelled", None, steps, None, None)
             self.step(env.noop_action())
             steps += 1
-        env.gui_state = "none"
+        env.gui_state = GuiState("none")
         return Result(True, self.action_type, "done", None, steps, None, None)

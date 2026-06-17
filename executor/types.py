@@ -3,6 +3,23 @@ from typing import Any, Literal
 
 
 @dataclass(frozen=True)
+class BlockPos:
+    """Minecraft block position in world coordinates."""
+
+    x: int
+    y: int
+    z: int
+
+
+@dataclass(frozen=True)
+class GuiState:
+    """Current GUI kind with optional backing block position."""
+
+    kind: Literal["none", "inventory", "crafting", "furnace"]
+    block_pos: BlockPos | None = None
+
+
+@dataclass(frozen=True)
 class GameSnapshot:
     """Latest observation published by Executor after reset or step."""
 
@@ -10,7 +27,7 @@ class GameSnapshot:
     info: dict[str, Any]
     pov: Any
     step_count: int
-    gui: Literal["none", "inventory", "crafting", "furnace"]
+    gui: GuiState
 
 
 @dataclass(frozen=True)
@@ -22,6 +39,7 @@ class BackgroundTask:
     status: Literal["running", "done", "failed", "cancelled"]
     item: str | None = None
     count: int | None = None
+    block_pos: BlockPos | None = None
     failure_reason: str | None = None
 
 
@@ -46,4 +64,4 @@ class ExecutorStatus:
     current_task: str | None
     task_id: str | None
     last_result: Result | None
-    gui: Literal["none", "inventory", "crafting", "furnace"]
+    gui: GuiState

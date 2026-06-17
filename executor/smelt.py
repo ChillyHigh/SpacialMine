@@ -3,7 +3,7 @@ from typing import Any
 from config import Config
 from executor.base import AbstractHandler
 from executor.gui import GuiOperator, load_recipe
-from executor.types import BackgroundTask, Result
+from executor.types import GuiState, BackgroundTask, Result
 
 
 class SmeltHandler(AbstractHandler):
@@ -23,7 +23,8 @@ class SmeltHandler(AbstractHandler):
 
         if self.step is None or self.publish is None or self.cancel is None:
             raise RuntimeError("handler is not bound")
-        if getattr(env, "gui_state", "none") != "furnace":
+        gui_state = getattr(env, "gui_state", GuiState("none"))
+        if gui_state.kind != "furnace":
             return Result(
                 success=False,
                 action_type=self.action_type,
@@ -40,6 +41,7 @@ class SmeltHandler(AbstractHandler):
             status="running",
             item=params["item"],
             count=int(params["count"]),
+            block_pos=gui_state.block_pos,
         )
         if self.cancel.is_set():
             return Result(False, self.action_type, "cancelled", None, None, None, None)
@@ -76,7 +78,8 @@ class TakeFurnaceOutputHandler(AbstractHandler):
 
         if self.step is None or self.publish is None or self.cancel is None:
             raise RuntimeError("handler is not bound")
-        if getattr(env, "gui_state", "none") != "furnace":
+        gui_state = getattr(env, "gui_state", GuiState("none"))
+        if gui_state.kind != "furnace":
             return Result(
                 success=False,
                 action_type=self.action_type,
@@ -90,7 +93,7 @@ class TakeFurnaceOutputHandler(AbstractHandler):
             return Result(False, self.action_type, "cancelled", None, None, None, None)
         operator = GuiOperator(env, self.step, self.cancel, self.config)
         try:
-            steps = operator.take_furnace_output(int(params["count"]))
+            steps = operator.take_furnace_output()
         except InterruptedError:
             return Result(False, self.action_type, "cancelled", None, operator.steps, None, None)
         except AssertionError as exc:

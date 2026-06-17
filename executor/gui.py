@@ -9,6 +9,7 @@ from typing import Any, Callable
 import numpy as np
 
 from config import Config
+from executor.types import GuiState
 
 StepFn = Callable[[dict[str, Any]], tuple[Any, dict[str, Any]]]
 
@@ -110,7 +111,7 @@ class GuiOperator:
         self.cursor = [self.width // 2, self.height // 2]
         if not self.info.get("isGuiOpen", self.info.get("is_gui_open", False)):
             raise AssertionError("inventory gui did not open")
-        self.env.gui_state = "inventory"
+        self.env.gui_state = GuiState("inventory")
 
     def move_to(self, slots: dict[str, tuple[float, float]], slot: str) -> None:
         """Move the cursor to a named GUI slot."""
@@ -195,6 +196,13 @@ class GuiOperator:
             self.use()
         self.put_selected(slots, target)
 
+    def take_result_stack(self, slots: dict[str, tuple[float, float]], target: str) -> None:
+        """Take the full result stack and place it into inventory."""
+
+        self.move_to(slots, "result_0")
+        self.click()
+        self.put_selected(slots, target)
+
     def craft(self, target: str, count: int, recipe: dict[str, Any], gui: str) -> int:
         """Craft one recipe in an already open inventory or crafting table GUI."""
 
@@ -263,14 +271,14 @@ class GuiOperator:
         self.put_selected(self.furnace_slots, fuel_slot)
         return self.steps
 
-    def take_furnace_output(self, count: int) -> int:
-        """Take smelted output from the furnace result slot into inventory."""
+    def take_furnace_output(self) -> int:
+        """Take the full smelted output stack from the furnace result slot."""
 
         labels = self.labels(2)
         target_slot = self.find_item(labels, "none")
         if target_slot is None:
             raise AssertionError("no space to place furnace output")
-        self.take_result(self.furnace_slots, target_slot, count)
+        self.take_result_stack(self.furnace_slots, target_slot)
         return self.steps
 
 

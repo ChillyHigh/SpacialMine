@@ -8,7 +8,7 @@ from minestudio.simulator.callbacks import VoxelsCallback
 
 from config import Config
 from executor.base import AbstractHandler
-from executor.types import BackgroundTask, ExecutorStatus, GameSnapshot, Result
+from executor.types import BackgroundTask, ExecutorStatus, GameSnapshot, GuiState, Result
 from executor.ws import SnapshotServer
 
 
@@ -39,7 +39,7 @@ class Executor:
         self.step_count = 0
         self.ws = SnapshotServer(config.ws_host, config.ws_port)
         self.ws.start()
-        self.env.gui_state = "none"
+        self.env.gui_state = GuiState("none")
         obs, info = self.env.reset()
         self.publish(obs, info)
 
@@ -93,6 +93,25 @@ class Executor:
         result = None
         try:
             result = handler.run(self.env, params)
+            if result.success and handler.action_type == "take_furnace_output":
+                gui_state = getattr(self.env, "gui_state", GuiState("none"))
+                expired = [
+                    task_id
+                    for task_id, task in self.background_tasks.items()
+                    if task.action_type == "smelt" and task.block_pos == gui_state.block_pos
+                ]
+                for task_id in expired:
+                    del self.background_tasks[task_id]
+                if expired:
+                    result = Result(
+                        success=result.success,
+                        action_type=result.action_type,
+                        status=result.status,
+                        task_id=expired[0],
+                        steps_taken=result.steps_taken,
+                        failure_reason=result.failure_reason,
+                        smelt_task=None,
+                    )
             self.last_result = result
             if result.smelt_task is not None:
                 self.background_tasks[result.smelt_task.task_id] = result.smelt_task
@@ -137,7 +156,7 @@ class Executor:
         obs, reward, terminated, truncated, info = self.env.step(action)
         self.step_count += 1
         if info.get("is_gui_open") is False or info.get("isGuiOpen") is False:
-            self.env.gui_state = "none"
+            self.env.gui_state = GuiState("none")
         self.publish(obs, info)
         return obs, info
 
@@ -209,11 +228,13 @@ class Executor:
                 "current_task": status.current_task,
                 "task_id": status.task_id,
                 "last_result": status.last_result,
-                "gui": status.gui,
+                "gui": status.gui.kind,
+                "gui_state": status.gui,
             },
             "snapshot": {
                 "step_count": self.latest_snapshot.step_count if self.latest_snapshot else self.step_count,
-                "gui": self.latest_snapshot.gui if self.latest_snapshot else self.env.gui_state,
+                "gui": self.latest_snapshot.gui.kind if self.latest_snapshot else self.env.gui_state.kind,
+                "gui_state": self.latest_snapshot.gui if self.latest_snapshot else self.env.gui_state,
             },
             "background_tasks": list(self.background_tasks.values()),
         }

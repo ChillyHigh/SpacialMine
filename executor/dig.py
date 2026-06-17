@@ -1,7 +1,7 @@
 from typing import Any
 
 from executor.base import AbstractHandler
-from executor.types import Result
+from executor.types import GuiState, Result
 
 
 class DigHandler(AbstractHandler):
@@ -25,5 +25,5 @@ class DigHandler(AbstractHandler):
                 action["forward"] = 1
             self.step(action)
             steps += 1
-        env.gui_state = "none"
+        env.gui_state = GuiState("none")
         return Result(True, self.action_type, "done", None, steps, None, None)

@@ -3,7 +3,7 @@ from typing import Any
 from config import Config
 from executor.base import AbstractHandler
 from executor.gui import GuiOperator, load_recipe, recipe_needs_table
-from executor.types import Result
+from executor.types import GuiState, Result
 
 
 class CraftHandler(AbstractHandler):
@@ -30,7 +30,8 @@ class CraftHandler(AbstractHandler):
         except OSError as exc:
             return Result(False, self.action_type, "failed", None, None, str(exc), None)
         needs_table = recipe_needs_table(recipe)
-        if env.gui_state == "none":
+        gui_state = getattr(env, "gui_state", GuiState("none"))
+        if gui_state.kind == "none":
             if needs_table:
                 return Result(
                     success=False,
@@ -44,23 +45,24 @@ class CraftHandler(AbstractHandler):
             operator = GuiOperator(env, self.step, self.cancel, self.config)
             try:
                 operator.open_inventory()
+                gui_state = getattr(env, "gui_state", GuiState("none"))
             except AssertionError as exc:
                 return Result(False, self.action_type, "failed", None, operator.steps, str(exc), None)
-        if env.gui_state not in {"inventory", "crafting"}:
+        if gui_state.kind not in {"inventory", "crafting"}:
             return Result(
                 success=False,
                 action_type=self.action_type,
                 status="failed",
                 task_id=None,
                 steps_taken=None,
-                failure_reason=f"craft cannot run while {env.gui_state} gui is open",
+                failure_reason=f"craft cannot run while {gui_state.kind} gui is open",
                 smelt_task=None,
             )
-        if needs_table and env.gui_state != "crafting":
+        if needs_table and gui_state.kind != "crafting":
             return Result(False, self.action_type, "failed", None, None, "crafting table recipe requires crafting gui", None)
         operator = GuiOperator(env, self.step, self.cancel, self.config)
         try:
-            steps = operator.craft(str(params["item"]), int(params["count"]), recipe, env.gui_state)
+            steps = operator.craft(str(params["item"]), int(params["count"]), recipe, gui_state.kind)
         except InterruptedError:
             return Result(False, self.action_type, "cancelled", None, operator.steps, None, None)
         except AssertionError as exc:

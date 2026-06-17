@@ -5,7 +5,7 @@ import numpy as np
 
 from config import Config
 from executor.base import AbstractHandler
-from executor.types import Result
+from executor.types import BlockPos, GuiState, Result
 
 
 class OpenGuiHandler(AbstractHandler):
@@ -32,12 +32,16 @@ class OpenGuiHandler(AbstractHandler):
             return Result(False, self.action_type, "cancelled", None, None, None, None)
 
         target = None
+        target_pos = None
         best_distance = None
         obs, info = self.step(env.noop_action())
         steps = 1
         voxels = info.get("voxels")
         if not isinstance(voxels, list):
             return Result(False, self.action_type, "failed", None, steps, "open_gui did not receive voxels from MinecraftSim", None)
+        player = info.get("player_pos", {})
+        if not {"x", "y", "z"} <= set(player):
+            return Result(False, self.action_type, "failed", None, steps, "player position is missing from info", None)
         for voxel in voxels:
             if not isinstance(voxel, dict):
                 continue
@@ -51,6 +55,11 @@ class OpenGuiHandler(AbstractHandler):
             if best_distance is None or distance < best_distance:
                 best_distance = distance
                 target = (dx, dy, dz)
+                target_pos = BlockPos(
+                    math.floor(float(player["x"]) + float(voxel["x"])),
+                    math.floor(float(player["y"]) + float(voxel["y"])),
+                    math.floor(float(player["z"]) + float(voxel["z"])),
+                )
 
         if target is None:
             return Result(False, self.action_type, "failed", None, steps, f"no nearby {self.block_type} in voxels", None)
@@ -98,7 +107,7 @@ class OpenGuiHandler(AbstractHandler):
                 f"{self.gui_name} gui did not open after turning toward nearest {self.block_type}",
                 None,
             )
-        env.gui_state = self.gui_state
+        env.gui_state = GuiState(self.gui_state, target_pos)
         self.publish(obs, info)
         return Result(True, self.action_type, "done", None, steps, None, None)
 
