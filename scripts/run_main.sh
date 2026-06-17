@@ -9,6 +9,8 @@ set +u
 conda activate minestudio
 set -u
 
+export JAVA_HOME="$CONDA_PREFIX"
+export PATH="$JAVA_HOME/bin:$PATH"
 export LD_LIBRARY_PATH="$HOME/opt/openssl10/lib:${LD_LIBRARY_PATH:-}"
 export HF_ENDPOINT="https://hf-mirror.com"
 export PKG_CONFIG_PATH="$CONDA_PREFIX/lib/pkgconfig:$CONDA_PREFIX/share/pkgconfig:${PKG_CONFIG_PATH:-}"
