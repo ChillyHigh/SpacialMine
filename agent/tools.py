@@ -37,14 +37,20 @@ class AgentTools:
         result = self.executor.submit(SmeltHandler(self.config), {"item": item, "count": count, "fuel": fuel})
         if not result.success:
             raise ToolException(result.failure_reason or "smelt failed")
+        if result.smelt_task is None:
+            raise ToolException("smelt did not return a background task")
+        self.executor.add_background_task(result.smelt_task)
         return f"smelt {item} x{count} started"
 
     def take_furnace_output(self) -> str:
         """Take completed smelting output from the open furnace GUI."""
 
+        gui_state = self.executor.check().gui
         result = self.executor.submit(TakeFurnaceOutputHandler(self.config), {})
         if not result.success:
             raise ToolException(result.failure_reason or "take_furnace_output failed")
+        if gui_state.block_pos is not None:
+            self.executor.remove_background_tasks(action_type="smelt", block_pos=gui_state.block_pos)
         return "take furnace output done"
 
     def open_crafting_table(self) -> str:

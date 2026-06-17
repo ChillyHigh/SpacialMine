@@ -8,7 +8,7 @@ from minestudio.simulator.callbacks import VoxelsCallback
 
 from config import Config
 from executor.base import AbstractHandler
-from executor.types import BackgroundTask, ExecutorStatus, GameSnapshot, GuiState, Result
+from executor.types import BackgroundTask, BlockPos, ExecutorStatus, GameSnapshot, GuiState, Result
 from executor.ws import SnapshotServer
 
 
@@ -93,28 +93,7 @@ class Executor:
         result = None
         try:
             result = handler.run(self.env, params)
-            if result.success and handler.action_type == "take_furnace_output":
-                gui_state = getattr(self.env, "gui_state", GuiState("none"))
-                expired = [
-                    task_id
-                    for task_id, task in self.background_tasks.items()
-                    if task.action_type == "smelt" and task.block_pos == gui_state.block_pos
-                ]
-                for task_id in expired:
-                    del self.background_tasks[task_id]
-                if expired:
-                    result = Result(
-                        success=result.success,
-                        action_type=result.action_type,
-                        status=result.status,
-                        task_id=expired[0],
-                        steps_taken=result.steps_taken,
-                        failure_reason=result.failure_reason,
-                        smelt_task=None,
-                    )
             self.last_result = result
-            if result.smelt_task is not None:
-                self.background_tasks[result.smelt_task.task_id] = result.smelt_task
             self.status = result.status if result.status in {"done", "failed", "cancelled"} else "done"
             return result
         finally:
@@ -139,8 +118,6 @@ class Executor:
                 failure_reason=result.failure_reason,
                 smelt_task=result.smelt_task,
             )
-            if result.smelt_task is not None:
-                self.background_tasks[result.smelt_task.task_id] = result.smelt_task
             self.status = result.status
         finally:
             with self.lock:
@@ -185,6 +162,24 @@ class Executor:
             last_result=self.last_result,
             gui=self.env.gui_state,
         )
+
+    def add_background_task(self, task: BackgroundTask) -> None:
+        """Track one background task for future human messages."""
+
+        self.background_tasks[task.task_id] = task
+
+    def remove_background_tasks(self, action_type: str | None = None, block_pos: BlockPos | None = None) -> list[str]:
+        """Remove tracked background tasks matching all provided filters."""
+
+        removed = []
+        for task_id, task in list(self.background_tasks.items()):
+            if action_type is not None and task.action_type != action_type:
+                continue
+            if block_pos is not None and task.block_pos != block_pos:
+                continue
+            removed.append(task_id)
+            del self.background_tasks[task_id]
+        return removed
 
     def cancel_task(self) -> Result:
         """Request cooperative cancellation for the current async task."""

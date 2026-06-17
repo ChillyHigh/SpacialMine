@@ -113,6 +113,14 @@ class GuiOperator:
             raise AssertionError("inventory gui did not open")
         self.env.gui_state = GuiState("inventory")
 
+    def close_gui(self) -> None:
+        """Close the currently open GUI and clear executor GUI state."""
+
+        self.press("inventory")
+        if self.info.get("isGuiOpen", self.info.get("is_gui_open", False)):
+            raise AssertionError("gui did not close")
+        self.env.gui_state = GuiState("none")
+
     def move_to(self, slots: dict[str, tuple[float, float]], slot: str) -> None:
         """Move the cursor to a named GUI slot."""
 
@@ -249,6 +257,7 @@ class GuiOperator:
         if target_slot is None:
             raise AssertionError("no space to place result")
         self.take_result(slots, target_slot, iter_count)
+        self.close_gui()
         return self.steps
 
     def smelt(self, target: str, count: int, recipe: dict[str, Any], fuel: str) -> int:
@@ -269,6 +278,7 @@ class GuiOperator:
             raise AssertionError("not enough fuels")
         self.pull(self.furnace_slots, fuel_slot, "resource_1", 1)
         self.put_selected(self.furnace_slots, fuel_slot)
+        self.close_gui()
         return self.steps
 
     def take_furnace_output(self) -> int:
@@ -279,6 +289,7 @@ class GuiOperator:
         if target_slot is None:
             raise AssertionError("no space to place furnace output")
         self.take_result_stack(self.furnace_slots, target_slot)
+        self.close_gui()
         return self.steps
 
 
