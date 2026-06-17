@@ -139,8 +139,6 @@ class Executor:
     def publish(self, obs: Any, info: dict[str, Any]) -> None:
         """Update latest_snapshot and emit it through the non-blocking ws server."""
 
-        if info.get("isGuiOpen") is False:
-            self.env.gui_state = "none"
         pov = obs.get("image") if isinstance(obs, dict) and "image" in obs else None
         if pov is None and isinstance(obs, dict):
             pov = obs.get("pov")

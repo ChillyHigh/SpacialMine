@@ -2,7 +2,7 @@ import asyncio
 import base64
 import json
 import threading
-from dataclasses import asdict, is_dataclass
+from dataclasses import fields, is_dataclass
 from typing import Any
 
 
@@ -27,9 +27,12 @@ class SnapshotServer:
     def publish(self, payload: dict[str, Any]) -> None:
         """Schedule a best-effort broadcast without blocking the caller."""
 
-        if self.loop is None:
+        if self.loop is None or self.loop.is_closed():
             return
-        self.loop.call_soon_threadsafe(asyncio.create_task, self.broadcast(payload))
+        try:
+            self.loop.call_soon_threadsafe(asyncio.create_task, self.broadcast(payload))
+        except RuntimeError:
+            return
 
     def stop(self) -> None:
         """Ask the server loop to stop and wait briefly for the thread."""
@@ -82,8 +85,8 @@ class SnapshotServer:
     def clean(self, value: Any) -> Any:
         """Convert dataclasses, numpy arrays, and bytes into JSON values."""
 
-        if is_dataclass(value):
-            return self.clean(asdict(value))
+        if is_dataclass(value) and not isinstance(value, type):
+            return {field.name: self.clean(getattr(value, field.name)) for field in fields(value)}
         if isinstance(value, dict):
             return {str(key): self.clean(item) for key, item in value.items()}
         if isinstance(value, (list, tuple)):
