@@ -19,6 +19,11 @@ class DigHandler(AbstractHandler):
         while steps < int(params["steps"]):
             if self.cancel.is_set():
                 return Result(False, self.action_type, "cancelled", None, steps, None, None)
-            self.step(env.noop_action())
+            action = env.noop_action()
+            action["attack"] = 1
+            if bool(params.get("forward", False)):
+                action["forward"] = 1
+            self.step(action)
             steps += 1
+        env.gui_state = "none"
         return Result(True, self.action_type, "done", None, steps, None, None)

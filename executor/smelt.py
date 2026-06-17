@@ -1,6 +1,8 @@
 from typing import Any
 
+from config import Config
 from executor.base import AbstractHandler
+from executor.gui import GuiOperator, load_recipe
 from executor.types import BackgroundTask, Result
 
 
@@ -10,8 +12,14 @@ class SmeltHandler(AbstractHandler):
     action_type = "smelt"
     is_async = False
 
+    def __init__(self, config: Config | None = None) -> None:
+        """Create a smelt handler with shared executor configuration."""
+
+        super().__init__()
+        self.config = config or Config()
+
     def run(self, env: Any, params: dict[str, Any]) -> Result:
-        """Place smelt work into background tracking without waiting."""
+        """Start smelting only after the furnace GUI has been opened."""
 
         if self.step is None or self.publish is None or self.cancel is None:
             raise RuntimeError("handler is not bound")
@@ -35,5 +43,17 @@ class SmeltHandler(AbstractHandler):
         )
         if self.cancel.is_set():
             return Result(False, self.action_type, "cancelled", None, None, None, None)
-        self.step(env.noop_action())
-        return Result(True, self.action_type, "done", task_id, 1, None, task)
+        try:
+            recipe = load_recipe(self.config, str(params["item"]))
+        except OSError as exc:
+            return Result(False, self.action_type, "failed", task_id, None, str(exc), None)
+        if recipe.get("type") != "minecraft:smelting":
+            return Result(False, self.action_type, "failed", task_id, None, f"{params['item']} is not a smelting recipe", None)
+        operator = GuiOperator(env, self.step, self.cancel, self.config)
+        try:
+            steps = operator.smelt(str(params["item"]), int(params["count"]), recipe, str(params.get("fuel", "coals")))
+        except InterruptedError:
+            return Result(False, self.action_type, "cancelled", task_id, operator.steps, None, None)
+        except AssertionError as exc:
+            return Result(False, self.action_type, "failed", task_id, operator.steps, str(exc), None)
+        return Result(True, self.action_type, "done", task_id, steps, None, task)

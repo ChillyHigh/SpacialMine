@@ -133,6 +133,8 @@ class Executor:
 
         obs, reward, terminated, truncated, info = self.env.step(action)
         self.step_count += 1
+        if info.get("is_gui_open") is False or info.get("isGuiOpen") is False:
+            self.env.gui_state = "none"
         self.publish(obs, info)
         return obs, info
 
