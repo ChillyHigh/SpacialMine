@@ -263,6 +263,16 @@ class GuiOperator:
         self.put_selected(self.furnace_slots, fuel_slot)
         return self.steps
 
+    def take_furnace_output(self, count: int) -> int:
+        """Take smelted output from the furnace result slot into inventory."""
+
+        labels = self.labels(2)
+        target_slot = self.find_item(labels, "none")
+        if target_slot is None:
+            raise AssertionError("no space to place furnace output")
+        self.take_result(self.furnace_slots, target_slot, count)
+        return self.steps
+
 
 def load_recipe(config: Config, item: str) -> dict[str, Any]:
     """Load one Minecraft recipe from the configured MineStudio assets."""

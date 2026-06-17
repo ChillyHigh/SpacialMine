@@ -9,7 +9,7 @@ from executor.dig import DigHandler
 from executor.navigate import NavigateHandler
 from executor.open_gui import OpenCraftingTableHandler, OpenFurnaceHandler
 from executor.place import PlaceBlockHandler
-from executor.smelt import SmeltHandler
+from executor.smelt import SmeltHandler, TakeFurnaceOutputHandler
 from executor.steve import SteveHandler
 from executor.types import Result
 
@@ -38,6 +38,14 @@ class AgentTools:
         if not result.success:
             raise ToolException(result.failure_reason or "smelt failed")
         return f"smelt {item} x{count} started"
+
+    def take_furnace_output(self, count: int) -> str:
+        """Take completed smelting output from the open furnace GUI."""
+
+        result = self.executor.submit(TakeFurnaceOutputHandler(self.config), {"count": count})
+        if not result.success:
+            raise ToolException(result.failure_reason or "take_furnace_output failed")
+        return f"take furnace output x{count} done"
 
     def open_crafting_table(self) -> str:
         """Open the crafting table currently under the crosshair."""
