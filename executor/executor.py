@@ -4,6 +4,7 @@ import uuid
 from typing import Any
 
 from minestudio.simulator import MinecraftSim
+from minestudio.simulator.callbacks import VoxelsCallback
 
 from config import Config
 from executor.base import AbstractHandler
@@ -19,12 +20,13 @@ class Executor:
 
         os.environ.setdefault("MINESTUDIO_DIR", "/mnt/home/user42/ChillyHigh/minestudio_data")
         self.config = config
+        callbacks = [*config.env_callbacks, VoxelsCallback()]
         self.env = MinecraftSim(
             action_type="env",
             obs_size=config.env_obs_size,
             seed=config.env_seed or 0,
             preferred_spawn_biome=config.env_preferred_biome,
-            callbacks=list(config.env_callbacks),
+            callbacks=callbacks,
         )
         self.lock = threading.Lock()
         self.cancel_event = threading.Event()

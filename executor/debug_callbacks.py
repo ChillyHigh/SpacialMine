@@ -39,9 +39,16 @@ class DebugSetupCallback(MinecraftCallback):
             obs, reward, done, info = sim.env.step(sim.env.noop_action())
         missing = []
         inventory = obs.get("inventory", {})
+        equipped = obs.get("equipped_items", {})
         for item in self.inventory:
-            slot = str(item["slot"])
-            current = inventory.get(slot, {})
+            slot = int(item["slot"])
+            current = inventory.get(slot, inventory.get(str(slot), {}))
+            if slot == 0 and current.get("type") in {None, "none"}:
+                mainhand = equipped.get("mainhand", {})
+                if isinstance(mainhand, str):
+                    current = {"type": mainhand, "quantity": item["quantity"]}
+                else:
+                    current = mainhand
             if current.get("type") != item["type"] or int(current.get("quantity", 0)) < int(item["quantity"]):
                 missing.append(item)
         if missing:

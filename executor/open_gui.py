@@ -1,91 +1,125 @@
-from typing import Any
+import math
+from typing import Any, ClassVar
+
+import numpy as np
 
 from config import Config
 from executor.base import AbstractHandler
 from executor.types import Result
 
 
-class OpenCraftingTableHandler(AbstractHandler):
-    """Open and record crafting table GUI state."""
+class OpenGuiHandler(AbstractHandler):
+    """Turn toward the nearest target block, right-click it, and record GUI state."""
+
+    is_async = False
+    action_type: ClassVar[str]
+    block_type: ClassVar[str]
+    gui_state: ClassVar[str]
+    gui_name: ClassVar[str]
+
+    def __init__(self, config: Config | None = None) -> None:
+        """Create an open-gui handler with shared configuration."""
+
+        super().__init__()
+        self.config = config or Config()
+
+    def run(self, env: Any, params: dict[str, Any]) -> Result:
+        """Open the nearest matching work-block GUI without moving the player."""
+
+        if self.step is None or self.publish is None or self.cancel is None:
+            raise RuntimeError("handler is not bound")
+        if self.cancel.is_set():
+            return Result(False, self.action_type, "cancelled", None, None, None, None)
+
+        obs, info = self.step(env.noop_action())
+        steps = 1
+        voxels = info.get("voxels")
+        if not isinstance(voxels, list):
+            return Result(
+                False,
+                self.action_type,
+                "failed",
+                None,
+                steps,
+                "open_gui did not receive voxels from MinecraftSim",
+                None,
+            )
+
+        player = info.get("player_pos", {})
+        if not {"x", "y", "z", "yaw", "pitch"} <= set(player):
+            return Result(False, self.action_type, "failed", None, steps, "player position is missing from info", None)
+
+        target = None
+        best_distance = None
+        for voxel in voxels:
+            if not isinstance(voxel, dict):
+                continue
+            block_type = str(voxel.get("type", "")).removeprefix("minecraft:")
+            if block_type != self.block_type:
+                continue
+            dx = float(voxel["x"]) + 0.5 - float(player["x"])
+            dy = float(voxel["y"]) + 0.5 - (float(player["y"]) + 1.62)
+            dz = float(voxel["z"]) + 0.5 - float(player["z"])
+            distance = dx * dx + dy * dy + dz * dz
+            if best_distance is None or distance < best_distance:
+                best_distance = distance
+                target = (dx, dy, dz)
+
+        if target is None:
+            return Result(False, self.action_type, "failed", None, steps, f"no nearby {self.block_type} in voxels", None)
+
+        dx, dy, dz = target
+        target_yaw = math.degrees(math.atan2(-dx, dz))
+        target_pitch = -math.degrees(math.atan2(dy, math.hypot(dx, dz)))
+        current_yaw = float(player["yaw"])
+        current_pitch = float(player["pitch"])
+        delta_yaw = (target_yaw - current_yaw + 180.0) % 360.0 - 180.0
+        delta_pitch = max(-90.0, min(90.0, target_pitch)) - current_pitch
+        action = env.noop_action()
+        action["camera"] = np.array([delta_pitch, delta_yaw], dtype=np.float32)
+        obs, info = self.step(action)
+        steps += 1
+
+        if self.cancel.is_set():
+            return Result(False, self.action_type, "cancelled", None, steps, None, None)
+        action = env.noop_action()
+        action["use"] = 1
+        obs, info = self.step(action)
+        steps += 1
+
+        for _ in range(self.config.gui_wait_steps):
+            if self.cancel.is_set():
+                return Result(False, self.action_type, "cancelled", None, steps, None, None)
+            obs, info = self.step(env.noop_action())
+            steps += 1
+        if not info.get("isGuiOpen", info.get("is_gui_open", False)):
+            return Result(
+                False,
+                self.action_type,
+                "failed",
+                None,
+                steps,
+                f"{self.gui_name} gui did not open after turning toward nearest {self.block_type}",
+                None,
+            )
+        env.gui_state = self.gui_state
+        self.publish(obs, info)
+        return Result(True, self.action_type, "done", None, steps, None, None)
+
+
+class OpenCraftingTableHandler(OpenGuiHandler):
+    """Turn toward and open the nearest crafting table GUI."""
 
     action_type = "open_crafting_table"
-    is_async = False
-
-    def __init__(self, config: Config | None = None) -> None:
-        """Create an open-crafting handler with shared configuration."""
-
-        super().__init__()
-        self.config = config or Config()
-
-    def run(self, env: Any, params: dict[str, Any]) -> Result:
-        """Right-click the targeted crafting table and record GUI state."""
-
-        if self.step is None or self.publish is None or self.cancel is None:
-            raise RuntimeError("handler is not bound")
-        if self.cancel.is_set():
-            return Result(False, self.action_type, "cancelled", None, None, None, None)
-        action = env.noop_action()
-        action["use"] = 1
-        obs, info = self.step(action)
-        steps = 1
-        for _ in range(self.config.gui_wait_steps):
-            if self.cancel.is_set():
-                return Result(False, self.action_type, "cancelled", None, steps, None, None)
-            obs, info = self.step(env.noop_action())
-            steps += 1
-        if not info.get("isGuiOpen", info.get("is_gui_open", False)):
-            return Result(
-                False,
-                self.action_type,
-                "failed",
-                None,
-                steps,
-                "crafting table gui did not open; face a crafting table before calling open_crafting_table",
-                None,
-            )
-        env.gui_state = "crafting"
-        self.publish(obs, info)
-        return Result(True, self.action_type, "done", None, steps, None, None)
+    block_type = "crafting_table"
+    gui_state = "crafting"
+    gui_name = "crafting table"
 
 
-class OpenFurnaceHandler(AbstractHandler):
-    """Open and record furnace GUI state."""
+class OpenFurnaceHandler(OpenGuiHandler):
+    """Turn toward and open the nearest furnace GUI."""
 
     action_type = "open_furnace"
-    is_async = False
-
-    def __init__(self, config: Config | None = None) -> None:
-        """Create an open-furnace handler with shared configuration."""
-
-        super().__init__()
-        self.config = config or Config()
-
-    def run(self, env: Any, params: dict[str, Any]) -> Result:
-        """Right-click the targeted furnace and record GUI state."""
-
-        if self.step is None or self.publish is None or self.cancel is None:
-            raise RuntimeError("handler is not bound")
-        if self.cancel.is_set():
-            return Result(False, self.action_type, "cancelled", None, None, None, None)
-        action = env.noop_action()
-        action["use"] = 1
-        obs, info = self.step(action)
-        steps = 1
-        for _ in range(self.config.gui_wait_steps):
-            if self.cancel.is_set():
-                return Result(False, self.action_type, "cancelled", None, steps, None, None)
-            obs, info = self.step(env.noop_action())
-            steps += 1
-        if not info.get("isGuiOpen", info.get("is_gui_open", False)):
-            return Result(
-                False,
-                self.action_type,
-                "failed",
-                None,
-                steps,
-                "furnace gui did not open; face a furnace before calling open_furnace",
-                None,
-            )
-        env.gui_state = "furnace"
-        self.publish(obs, info)
-        return Result(True, self.action_type, "done", None, steps, None, None)
+    block_type = "furnace"
+    gui_state = "furnace"
+    gui_name = "furnace"
