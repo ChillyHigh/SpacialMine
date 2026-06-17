@@ -1,0 +1,27 @@
+[project]
+name = "spacialmine"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10,<3.11"
+dependencies = [
+    "langchain>=1.2.15",
+    "langchain-openai>=1.2.0",
+    "load-dotenv>=0.1.0",
+    "neo4j>=6.1.0",
+    "python-dotenv>=1.2.2",
+    "minestudio==1.1.6",
+    "pyglet==1.4.0b1",
+    "psutil>=7,<8",
+]
+
+[tool.uv]
+override-dependencies = [
+    "opencv-python==4.8.1.78",
+    "opencv-python-headless==4.8.1.78",
+]
+
+[tool.uv.workspace]
+members = [
+    "SpacialMine",
+]
