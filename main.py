@@ -11,7 +11,7 @@ def main() -> None:
     from executor.open_gui import OpenCraftingTableHandler
 
     debug_inventory = [
-        {"slot": 0, "type": "planks", "quantity": 16},
+        {"slot": 0, "type": "oak_planks", "quantity": 16},
         {"slot": 1, "type": "stick", "quantity": 8},
         {"slot": 2, "type": "iron_ore", "quantity": 4},
         {"slot": 3, "type": "coal", "quantity": 4},
