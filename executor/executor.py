@@ -149,7 +149,7 @@ class Executor:
             step_count=self.step_count,
             gui=self.env.gui_state,
         )
-        self.ws.publish(self.payload())
+        self.ws.publish(self.payload(), pov)
 
     def check(self) -> ExecutorStatus:
         """Return the current executor status without touching MinecraftSim."""
@@ -197,8 +197,18 @@ class Executor:
     def payload(self) -> dict[str, Any]:
         """Build the ws payload from current executor state."""
 
+        status = self.check()
         return {
-            "status": self.check(),
-            "snapshot": self.latest_snapshot,
+            "status": {
+                "status": status.status,
+                "current_task": status.current_task,
+                "task_id": status.task_id,
+                "last_result": status.last_result,
+                "gui": status.gui,
+            },
+            "snapshot": {
+                "step_count": self.latest_snapshot.step_count if self.latest_snapshot else self.step_count,
+                "gui": self.latest_snapshot.gui if self.latest_snapshot else self.env.gui_state,
+            },
             "background_tasks": list(self.background_tasks.values()),
         }

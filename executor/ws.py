@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import logging
 import threading
 from dataclasses import fields, is_dataclass
 from typing import Any
@@ -24,13 +25,13 @@ class SnapshotServer:
 
         self.thread.start()
 
-    def publish(self, payload: dict[str, Any]) -> None:
+    def publish(self, payload: dict[str, Any], image: Any = None) -> None:
         """Schedule a best-effort broadcast without blocking the caller."""
 
         if self.loop is None or self.loop.is_closed():
             return
         try:
-            self.loop.call_soon_threadsafe(asyncio.create_task, self.broadcast(payload))
+            self.loop.call_soon_threadsafe(lambda: asyncio.create_task(self.broadcast(payload, image)))
         except RuntimeError:
             return
 
@@ -67,12 +68,31 @@ class SnapshotServer:
         async with websockets.serve(handler, self.host, self.port):
             await self.stop_event.wait()
 
-    async def broadcast(self, payload: dict[str, Any]) -> None:
+    async def broadcast(self, payload: dict[str, Any], image: Any = None) -> None:
         """Send a payload to connected clients and drop stale connections."""
 
         if not self.clients:
             return
-        message = json.dumps(self.clean(payload), ensure_ascii=True)
+        try:
+            message_payload = self.clean(payload)
+            if image is not None:
+                import cv2
+
+                frame = image
+                if hasattr(frame, "dtype") and str(frame.dtype) != "uint8":
+                    frame = frame.astype("uint8")
+                if hasattr(frame, "ndim") and frame.ndim == 3 and frame.shape[2] == 3:
+                    frame = frame[:, :, ::-1]
+                success, encoded = cv2.imencode(".png", frame)
+                if not success:
+                    raise ValueError("failed to encode websocket frame")
+                snapshot = message_payload.setdefault("snapshot", {})
+                snapshot["image_format"] = "png_base64"
+                snapshot["image"] = base64.b64encode(encoded.tobytes()).decode("ascii")
+            message = json.dumps(message_payload, ensure_ascii=True)
+        except Exception:
+            logging.exception("failed to build websocket payload")
+            return
         stale = []
         for client in tuple(self.clients):
             try:
