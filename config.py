@@ -17,5 +17,7 @@ class Config:
     ws_port: int = 8765
     assets_dir: str = str(ROOT_DIR / "assets")
     gui_wait_steps: int = 5
+    open_gui_camera_step: float = 8.0
+    open_gui_turn_steps: int = 20
     place_wait_steps: int = 2
     steve_steps: int = 20

@@ -31,35 +31,22 @@ class OpenGuiHandler(AbstractHandler):
         if self.cancel.is_set():
             return Result(False, self.action_type, "cancelled", None, None, None, None)
 
+        target = None
+        best_distance = None
         obs, info = self.step(env.noop_action())
         steps = 1
         voxels = info.get("voxels")
         if not isinstance(voxels, list):
-            return Result(
-                False,
-                self.action_type,
-                "failed",
-                None,
-                steps,
-                "open_gui did not receive voxels from MinecraftSim",
-                None,
-            )
-
-        player = info.get("player_pos", {})
-        if not {"x", "y", "z", "yaw", "pitch"} <= set(player):
-            return Result(False, self.action_type, "failed", None, steps, "player position is missing from info", None)
-
-        target = None
-        best_distance = None
+            return Result(False, self.action_type, "failed", None, steps, "open_gui did not receive voxels from MinecraftSim", None)
         for voxel in voxels:
             if not isinstance(voxel, dict):
                 continue
             block_type = str(voxel.get("type", "")).removeprefix("minecraft:")
             if block_type != self.block_type:
                 continue
-            dx = float(voxel["x"]) + 0.5 - float(player["x"])
-            dy = float(voxel["y"]) + 0.5 - (float(player["y"]) + 1.62)
-            dz = float(voxel["z"]) + 0.5 - float(player["z"])
+            dx = float(voxel["x"]) + 0.5
+            dy = float(voxel["y"]) + 0.5 - 1.62
+            dz = float(voxel["z"]) + 0.5
             distance = dx * dx + dy * dy + dz * dz
             if best_distance is None or distance < best_distance:
                 best_distance = distance
@@ -69,16 +56,25 @@ class OpenGuiHandler(AbstractHandler):
             return Result(False, self.action_type, "failed", None, steps, f"no nearby {self.block_type} in voxels", None)
 
         dx, dy, dz = target
-        target_yaw = math.degrees(math.atan2(-dx, dz))
+        target_yaw = math.degrees(math.atan2(dz, dx)) - 90.0
         target_pitch = -math.degrees(math.atan2(dy, math.hypot(dx, dz)))
-        current_yaw = float(player["yaw"])
-        current_pitch = float(player["pitch"])
-        delta_yaw = (target_yaw - current_yaw + 180.0) % 360.0 - 180.0
-        delta_pitch = max(-90.0, min(90.0, target_pitch)) - current_pitch
-        action = env.noop_action()
-        action["camera"] = np.array([delta_pitch, delta_yaw], dtype=np.float32)
-        obs, info = self.step(action)
-        steps += 1
+        target_pitch = max(-90.0, min(90.0, target_pitch))
+        for _ in range(self.config.open_gui_turn_steps):
+            if self.cancel.is_set():
+                return Result(False, self.action_type, "cancelled", None, steps, None, None)
+            player = info.get("player_pos", {})
+            if not {"yaw", "pitch"} <= set(player):
+                return Result(False, self.action_type, "failed", None, steps, "player rotation is missing from info", None)
+            delta_yaw = (target_yaw - float(player["yaw"]) + 180.0) % 360.0 - 180.0
+            delta_pitch = target_pitch - float(player["pitch"])
+            if abs(delta_yaw) <= 1.0 and abs(delta_pitch) <= 1.0:
+                break
+            step_yaw = max(-self.config.open_gui_camera_step, min(self.config.open_gui_camera_step, delta_yaw))
+            step_pitch = max(-self.config.open_gui_camera_step, min(self.config.open_gui_camera_step, delta_pitch))
+            action = env.noop_action()
+            action["camera"] = np.array([step_pitch, step_yaw], dtype=np.float32)
+            obs, info = self.step(action)
+            steps += 1
 
         if self.cancel.is_set():
             return Result(False, self.action_type, "cancelled", None, steps, None, None)
